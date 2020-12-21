@@ -1,0 +1,785 @@
+---
+title: "Regressão Linear"
+author: "Elton J"
+date: "05/05/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Regressão Linear - Teoria e Aplicação R
+
+* [1. Regressão Linear Ponderada - WLS](#regressão-linear-ponderada-wls)
+
+* [2. Regressão Linear Simples - OLS](#regressão-linear-simples-ols)
+
+* [3. Regressão Linear Múltipla](#regressão-linear-múltipla)
+
+* [4. ANOVA de uma Regressão](#anova-para-um-modelo-de-regressão-linear)
+
+* [5. ANOVA para modelos aninhados](#anova-para-comparar-modelos-de-regressão-linear-aninhados)
+
+```{r c1}
+suppressMessages(library(dplyr))
+suppressMessages(library(GLMsData))
+suppressMessages(library(ggplot2))
+suppressMessages(library(knitr))
+suppressMessages(library(kableExtra))
+suppressMessages(library(psych))
+```
+
+## Regressão Linear Ponderada WLS
+
+### 1.1 Dados
+
+```{r c2, echo=T}
+data(gestation)
+
+gestation %>% 
+  head() %>% 
+    kable() %>% 
+      kable_styling()    
+
+describe(gestation) %>% 
+  round(2) %>% 
+    kable() %>% 
+      kable_styling()
+```
+### 1.2 Estimação (Na Raça)
+
+#### 1.2.1 Coeficientes ($\beta$'s) e $Var(Y_i / X_i = x)$ 
+
+$$ \hat{\beta_0} = \overline{y}_w - \hat{\beta_1} \overline{x}_w  $$
+
+$$\hat{\beta_1} = \frac{SS_{xy}}{SS_{x}} =  \frac{\sum_{i=1}^{n}w_i(x_i - 
+  \overline{x}_w)y_i}{\sum_{i=1}^{n}w_i(x_i - 
+  \overline{x}_w)x_i}$$
+
+
+$$R^2 = 1 - \frac{SQR}{SQT} = 1 - \frac{\sum_{i=1}^{n}w_i(y_i - \hat{y})^2}{\sum_{i=1}^{n}w_i(y_i - \overline{y})^2}$$
+
+
+
+Estimador não viesado para $\sigma^2_{\epsilon}$
+
+$$s^2 = \frac{SQR}{df} = \frac{\sum_{i=1}^{n}w_i(y_i - \hat{y}_i)^2}{n-2}$$
+
+
+
+Onde:
+
+* $\overline{x}_w = \frac{\sum_{i=1}^{n}w_ix_i}{\sum_{i=1}^{n}w_i}$ (Média Ponderada de X)
+
+* $\overline{y}_w = \frac{\sum_{i=1}^{n}w_iy_i}{\sum_{i=1}^{n}w_i}$ (Média Ponderada de Y)
+
+* $\hat{y}_i = \hat{\beta_0} + \hat{\beta_1}x_i$ ($y$ ajustado)
+
+* $\epsilon$ é o termo aleatório (erro), tal que $\epsilon \sim N(0, \sigma^2_{\epsilon})$
+
+* $df = n - 2$ (Graus de Liberdade) 
+
+* $s^2$ = Variância dos Resíduos
+
+* $s = \sqrt{s^2} =$ Erro Padrão dos Resíduos (RSE)
+
+```{r c3, echo=T}
+
+x <- gestation$Age # Variável Independente
+y <- gestation$Weight # Variável Dependente (Resposta)
+w <- gestation$Births # Pesos
+
+
+media_ponderada_x <- weighted.mean(x, w)# (Var, Pesos)
+media_ponderada_y <- weighted.mean(y, w)
+
+SSxy <- sum(w * (x - media_ponderada_x) * y) 
+SSx <- sum(w * (x - media_ponderada_x) * x) # Soma dos Quadrados de X (Sum of Squares [SS])
+
+beta1 <- SSxy / SSx
+
+beta0 <- media_ponderada_y - beta1 * media_ponderada_x
+
+SQR <- sum(w * (y - (beta0 + beta1 * x)) ^ 2) # Soma dos Quadrados dos Resíduos (RSS)
+
+df <- length(y) - 2 # n - 2
+
+s2 <- SQR / df
+s <- sqrt(s2) # RSE
+
+r2 <- 1 - SQR / sum(w * (y - media_ponderada_y) ^ 2)
+
+c('Beta0' = beta0, 'Beta1' = beta1, 'R2' = r2,'SQR' = SQR,
+  'Erro Padrão dos Resíduos (RSE)' = s)
+
+
+ggplot(data = NULL) +
+  geom_point(aes(x = x, y = y)) +
+  geom_abline(intercept = beta0, slope = beta1) +
+    xlab('Idade em Semanas') +
+    ylab('Peso Médio (Kg)') +
+    labs(title = 'WLS: B0 = -2.68; B1 = 0.15; R2 = 0.93; SQR = 11.42, RSE = 0.78') +
+      theme_minimal() 
+```
+
+#### 1.2.2 Erro Padrão (SE) dos Coeficientes
+
+Por definição:
+
+$$Var(\hat{\beta_0}) = \sigma^2(\frac{1}{\sum{w_i}} +
+\frac{\overline{x}^2_w}{SSx})\text{;    }
+Var(\hat{\beta_1}) = \frac{\sigma^2}{SS_x}$$
+
+Estimadores não viesados para $SE(\hat{\beta_0})$ e $SE(\hat{\beta_1})$
+
+$$SE(\hat{\beta_0}) = \sqrt{s^2(\frac{1}{\sum{w_i}} + \frac{\overline{x}^2_w}{SS_x})} = s\sqrt{(\frac{1}{\sum{w_i}} + \frac{\overline{x}^2_w}{SS_x})}$$
+$$SE(\hat{\beta_1}) = \sqrt{\frac{s^2}{SS_x}} = \frac{s}{\sqrt{SS_x}}$$
+
+```{r c4, echo=T}
+se_b0 <- s * sqrt(1/sum(w) + media_ponderada_x^2/SSx)
+
+se_b1 <- s / sqrt(SSx)
+
+c('SE(B0)' = se_b0, 'SE(B1)' = se_b1)
+
+```
+#### 1.2.2 Erro Padrão (SE) das Previsões ($\hat{y}$)
+Por definição:
+
+$$ Var(\hat{y_i}) = \sigma^2(\frac{1}{\sum{w_i}} + \frac{(x_i - \overline{x}_w)^2}
+{SS_x})$$ 
+
+Estimador não viesado para $Var(\hat{y_i})$
+
+$$ Var(\hat{y_i}) = s^2(\frac{1}{\sum{w_i}} + \frac{(x_i - \overline{x}_w)^2}
+{SS_x})$$ 
+
+```{r c5, echo=T}
+x_i <- 30
+
+y_chapeu_i <- beta0 + beta1 * x_i
+
+se_y_chapeu_i <- sqrt(s2 * (1/sum(w) + ((x_i - media_ponderada_x) ^ 2) / SSx))
+
+c('X_i' = x_i, '^Y_i' = y_chapeu_i, 'SE(^Y_i)' = se_y_chapeu_i)
+```
+
+### 1.3 Teste de hipóteses sobre $\beta_j$
+
+#### 1.3.1 Distribuição de $\beta_j$
+
+$$\hat{\beta_j} \sim N(\beta_j, Var(\hat\beta_j)) $$
+$$Z = \frac{\hat{\beta_j} - \beta_j}{SE(\hat{\beta_j})} \sim N(0, 1) $$
+
+Como $Var(\hat\beta_j)$ é estimada, então:
+
+$$T = \frac{\hat{\beta_j} - \beta_j}{SE(\hat{\beta_j)}} \sim T_{df = n-p'}$$
+
+Onde:
+
+* $T$ = T-Student
+
+* $p'$ = Número de coeficientes estimados
+
+* $n$ = Número de Observações
+
+#### 1.3.2 Teste
+
+$$H0: \beta_j = 0$$
+$$H1: \beta_j <>0$$
+
+$$ T_{obs} = \frac{\hat{\beta_j} - \beta_j^{Sob H0}(0)}{SE(\hat{\beta_j})}
+\text{; df = n - p' = 21 - 2 = 19}$$
+
+```{r c6, echo=T}
+t_obs_beta0 <- beta0 / se_b0
+p_beta0 <- 2 * pt(abs(t_obs_beta0), df = 19, lower.tail = F)# P(T>t); * 2 (Bicaudal)
+  
+t_obs_beta1 <- beta1 / se_b1
+p_beta1 <- 2 * pt(abs(t_obs_beta1), df = 19, lower.tail = F)# P(T>t); * 2 (Bicaudal)
+
+c("T Obs Beta0" = t_obs_beta0, 'P-Valor B0' = p_beta0,
+  "T Obs Beta1" = t_obs_beta1, 'P-Valor B1' = p_beta1)
+```
+
+### 1.4 Intervalos de Confiança
+
+#### 1.4.1 Intervalo de Confiança para $\beta_j$
+
+$$IC(\hat{\beta_j};1-\alpha) = \hat{\beta_j}\pm t_{df;\alpha/2}*SE(\hat{\beta_j})$$
+
+
+```{r c7, echo=T}
+# Intervalo de 95%; t = 2.093
+ic95_b0_sup <- beta0 + qt(0.975, df = 19) * se_b0
+ic95_b0_inf <- beta0 - qt(0.975, df = 19) * se_b0
+
+ic95_b1_sup <- beta1 + qt(0.975, df = 19) * se_b1
+ic95_b1_inf <- beta1 - qt(0.975, df = 19) * se_b1
+
+c("IC(95%;B0)Inf." = ic95_b0_inf, 'B0 Estimado' = beta0,
+  'IC(95%;B0)Sup.' = ic95_b0_sup, "IC(95%;B1)Inf." = ic95_b1_inf,
+  'B1 Estimado'= beta1, 'IC(95%;B1)Sup.' = ic95_b1_sup)
+
+```
+
+
+## Regressão Linear Simples OLS
+
+### 2.1 Dados
+
+```{r d2, echo=T}
+data(gestation)
+
+gestation %>% 
+  head() %>% 
+    kable() %>% 
+      kable_styling()    
+
+describe(gestation) %>% 
+  round(2) %>% 
+    kable() %>% 
+      kable_styling()
+```
+### 2.2 Estimação (Na Raça)
+
+#### 2.2.1 Coeficientes ($\beta$'s), $Var(Y_i / X_i = x)$ e $R^2$
+
+$$\hat{\beta_0} = \overline{y} - \hat{\beta_1} \overline{x}$$
+
+$$\hat{\beta_1} = \frac{SS_{xy}}{SS_{x}} =  \frac{\sum_{i=1}^{n}(x_i - 
+  \overline{x})y_i}{\sum_{i=1}^{n}(x_i - 
+  \overline{x})x_i}$$
+  
+$$R^2 = 1 - \frac{SQR}{SQT} = 1 - \frac{\sum_{i=1}^{n}(y_i - \hat{y})^2}{\sum_{i=1}^{n}(y_i - \overline{y})^2}$$
+
+
+Por definição:
+
+$$\sigma^2_{\epsilon} = Var(\epsilon) = E[(y_i - \overline{y_i})^2]$$
+
+Estimador não viesado para $\sigma^2_{\epsilon}$
+
+$$s^2 = EQM =\frac{SQR}{df} = \frac{\sum_{i=1}^{n}(y_i - \hat{y}_i)^2}{n-2}$$
+
+
+
+Onde:
+
+* $\overline{x} = \frac{\sum_{i=1}^{n}x_i}{n}$ (Média de X)
+
+* $\overline{y} = \frac{\sum_{i=1}^{n}y_i}{n}$ (Média de Y)
+
+* $\hat{y}_i = \hat{\beta_0} + \hat{\beta_1}x_i$ ($y$ ajustado)
+
+* $df = n - 2$ (Graus de Liberdade) 
+
+* $s^2 = \text{EQM = Erro Quadrático Médio (MSE Mean Square Error)}$
+
+* $s = \sqrt{s^2} =$ Erro Padrão dos Resíduos (RSE Residual Standard Error)
+
+* $\epsilon$ é o termo aleatório (erro), tal que $\epsilon \sim N(0, \sigma^2_{\epsilon})$
+
+* SQR = Soma dos Quadrados dos Resíduos (RSS)
+
+* SQT = Soma dos Quadrados Totais (TSS)
+
+* $R^2$ = Coeficiente de Determinação.
+
+```{r d3, echo=T}
+
+x <- gestation$Age # Variável Independente
+y <- gestation$Weight # Variável Dependente (Resposta)
+
+
+media_x <- mean(x)
+media_y <- mean(y)
+
+SSxy <- sum((x - media_x) * y) 
+SSx <- sum((x - media_x) * x) # Soma dos Quadrados de X (Sum of Squares [SS])
+
+beta1 <- SSxy / SSx
+
+beta0 <- media_y - beta1 * media_x
+
+SQR <- sum((y - (beta0 + beta1 * x)) ^ 2) # Soma dos Quadrados dos Resíduos (RSS)
+
+df <- length(y) - 2 # n - 2
+
+s2 <- SQR / df
+s <- sqrt(s2) # RSE
+
+r2 <- 1 - SQR / sum((y - media_y) ^ 2)
+
+c('Beta0' = beta0, 'Beta1' = beta1, 'R2' = r2,'SQR' = SQR,
+  'Erro Padrão dos Resíduos (RSE)' = s)
+
+
+ggplot(data = NULL) +
+  geom_point(aes(x = x, y = y)) +
+  geom_abline(intercept = beta0, slope = beta1) +
+    xlab('Idade em Semanas') +
+    ylab('Peso Médio (Kg)') +
+    labs(title = 'OLS: B0 = -3.05; B1 = 0.16; R2 = 0.97; SQR = 0.76,
+                  RSE = 0.20') +
+      theme_minimal() 
+```
+
+#### 2.2.2 Erro Padrão (SE) dos Coeficientes
+
+Por definição:
+
+$$Var(\hat{\beta_0}) = \sigma^2(\frac{1}{n} +
+\frac{\overline{x}^2}{SSx})\text{;    }
+Var(\hat{\beta_1}) = \frac{\sigma^2}{SS_x}$$
+
+Estimadores não viesados para $SE(\hat{\beta_0})$ e $SE(\hat{\beta_1})$
+
+$$SE(\hat{\beta_0}) = \sqrt{s^2(\frac{1}{n} + \frac{\overline{x}^2}{SS_x})} = s\sqrt{(\frac{1}{n} + \frac{\overline{x}^2}{SS_x})}$$
+$$SE(\hat{\beta_1}) = \sqrt{\frac{s^2}{SS_x}} = \frac{s}{\sqrt{SS_x}}$$
+
+```{r d4, echo=T}
+n <- length(y)
+
+se_b0 <- s * sqrt(1/n + media_x^2/SSx)
+
+se_b1 <- s / sqrt(SSx)
+
+c('SE(B0)' = se_b0, 'SE(B1)' = se_b1)
+
+```
+#### 2.2.2 Erro Padrão (SE) das Previsões ($\hat{y}$)
+
+Por definição:
+
+$$ Var(\hat{y_i}) = \sigma^2(\frac{1}{n} + \frac{(x_i - \overline{x})^2}
+{SS_x})$$ 
+
+Estimador não viesado para $Var(\hat{y_i})$
+
+$$ Var(\hat{y_i}) = s^2(\frac{1}{n} + \frac{(x_i - \overline{x})^2}
+{SS_x})$$ 
+
+```{r d5, echo=T}
+x_i <- 30
+
+y_chapeu_i <- beta0 + beta1 * x_i
+
+se_y_chapeu_i <- sqrt(s2 * (1/n + ((x_i - media_x) ^ 2) / SSx))
+
+c('X_i' = x_i, '^Y_i' = y_chapeu_i, 'SE(^Y_i)' = se_y_chapeu_i)
+```
+
+### 2.3 Teste de hipóteses sobre $\beta_j$
+
+#### 2.3.1 Distribuição de $\beta_j$
+
+$$\hat{\beta_j} \sim N(\beta_j, Var(\hat\beta_j)) $$
+$$Z = \frac{\hat{\beta_j} - \beta_j}{SE(\hat{\beta_j})}$$
+
+Como $Var(\hat\beta_j)$ é estimada, então:
+
+$$T = \frac{\hat{\beta_j} - \beta_j}{SE(\hat{\beta_j)}} \sim T_{df = n-p'}$$
+
+Onde:
+
+* $T$ = T-Student
+
+* $p'$ = Número de coeficientes estimados
+
+* $n$ = Número de Observações
+
+* $df$ = Graus de liberdade
+
+#### 2.3.2 Teste
+
+$$H0: \beta_j = 0$$
+$$H1: \beta_j <>0$$
+
+$$ T_{obs} = \frac{\hat{\beta_j} - \beta_j^{Sob H0}(0)}{SE(\hat{\beta_j})}
+\text{; df = n - p' = 21 - 2 = 19}$$
+
+```{r d6, echo=T}
+t_obs_beta0 <- beta0 / se_b0
+p_beta0 <- 2 * pt(abs(t_obs_beta0), df = 19, lower.tail = F)# P(T>t); * 2 (Bicaudal)
+  
+t_obs_beta1 <- beta1 / se_b1
+p_beta1 <- 2 * pt(abs(t_obs_beta1), df = 19, lower.tail = F)# P(T>t); * 2 (Bicaudal)
+
+c("T Obs Beta0" = t_obs_beta0, 'P-Valor B0' = p_beta0,
+  "T Obs Beta1" = t_obs_beta1, 'P-Valor B1' = p_beta1)
+```
+
+### 2.4 Intervalos de Confiança
+
+#### 2.4.1 Intervalo de Confiança para $\beta_j$
+
+$$IC(\hat{\beta_j};1-\alpha)=\hat{\beta_j}\pm t_{df;\alpha/2}*SE(\hat{\beta_j})$$
+
+```{r d7, echo=T}
+# Intervalo de 95%; t = 2.093
+ic95_b0_sup <- beta0 + qt(0.975, df = 19) * se_b0
+ic95_b0_inf <- beta0 - qt(0.975, df = 19) * se_b0
+
+ic95_b1_sup <- beta1 + qt(0.975, df = 19) * se_b1
+ic95_b1_inf <- beta1 - qt(0.975, df = 19) * se_b1
+
+c("IC(95%;B0)Inf." = ic95_b0_inf, 'B0 Estimado' = beta0,
+  'IC(95%;B0)Sup.' = ic95_b0_sup, "IC(95%;B1)Inf." = ic95_b1_inf,
+  'B1 Estimado'= beta1, 'IC(95%;B1)Sup.' = ic95_b1_sup)
+```
+
+
+## Regressão Linear Múltipla
+
+### 3.1 Dados
+
+```{r e2, echo=T}
+data("lungcap")
+
+lungcap$Smoke <- factor(lungcap$Smoke)
+
+lungcap %>% 
+  head() %>% 
+    kable() %>% 
+      kable_styling()    
+
+summary(lungcap)
+```
+### 3.2 Estimação - Matricial (Na Raça)
+
+#### 3.2.1 Modelo
+
+$$\mathbf{\hat{Y}} = \mathbf{X}\mathbf{\beta} + \mathbf\epsilon=\hat{\beta_0} + \sum_{j=1}^{p}\hat{\beta_j}\mathbf{X}_{ji}$$
+
+  
+$$\begin{bmatrix} 
+  \hat{y_1}\\
+  \vdots\\
+  \vdots\\
+  \hat{y_n}\\
+  \end{bmatrix}_{nx1} = \begin{bmatrix} 
+                        1 & x_{11} & x_{21}& \dots & x_{j1}\\
+                        1 & x_{12}& x_{22} & \dots & x_{j2}\\
+                        \vdots & \vdots & \vdots & \dots & \vdots \\
+                        1 & x_{1n} & x_{2n}& \dots & x_{jn}\\
+                        \end{bmatrix}_{nx(j+1)} \begin{bmatrix} 
+                                                \hat{\beta_0}\\
+                                                \hat{\beta_1}\\
+                                                \vdots\\
+                                                \hat{\beta_j}\\
+                                                \end{bmatrix}_{(j+1)x1}$$
+$$Var(Y) = \sigma^2 I_{n}= \begin{bmatrix} 
+                           \sigma^2 & 0 & \dots & 0\\
+                           0 & \sigma^2 & \ddots & \vdots\\
+                           \vdots & \ddots & \ddots & 0 \\
+                           0 & \dots & 0 & \sigma^2\\
+                           \end{bmatrix}_{nXn} $$ 
+
+#### 3.2.2 Estimativa dos coeficientes *$\mathbf{\beta}$*
+
+$$\mathbf{\beta}_{px1} = (\mathbf{X^T}_{pxn}\mathbf{X}_{nxp})_{pxp}^{-1}\mathbf{X^T}_{pxn}
+\mathbf{Y}_{nx1}$$
+Onde:
+
+* $\mathbf{X}_{nxp}$ é a matriz das p-1 variáveis preditoras e mais uma primeira
+coluna com 1 representando o intercepto.
+
+* $\mathbf{X^T}_{pxn}$ é a transposta de X
+
+* $^(\mathbf{X^T}\mathbf{X})^{-1}$ é a inversa do produto.
+
+* $\mathbf{Y}_{nx1}$ é a matriz (vetor) da variável resposta.
+
+* n = Número de observações
+
+* p = Número de coeficientes estimados (Intercepto mais variáveis)
+
+```{r e3, echo=T}
+
+# Matriz das Preditoras (1@ coluna é 1 pelo intercepto)
+X <- model.matrix( ~ Age + Ht + factor(Gender) + factor(Smoke), data = lungcap)
+# Fatores são convertidos para 1 (Masculino / Fumante) ou 0 (Fem / N_Fumante)
+Y <- log(lungcap$FEV)
+
+betas <- solve(t(X) %*% X) %*%  t(X) %*% Y
+# Ou ainda
+# betas <- solve((t(X) %*% X), (t(X) %*% Y))
+# betas <- qr.coef(qr(X), Y)
+
+betas
+```
+
+#### 3.2.2 Estimativa da variância *$\sigma^2_{\epsilon}$*
+
+$$s^2 = \frac{(\mathbf{Y} - \mathbf{\hat{Y}})^T(\mathbf{Y} - \mathbf{\hat{Y}})}
+          {n - p}$$
+Onde:
+
+* $\mathbf{Y}_{nx1}$ é a matriz (vetor) da variável resposta.
+
+* $\mathbf{\hat{Y}}_{nx1} = \mathbf{X}\mathbf{\beta}$ é a matriz (vetor) dos 
+valores ajustados da variável resposta
+
+* n = Número de observações
+
+* p = Número de coeficientes estimados (Intercepto mais variáveis)
+
+```{r e4, echo=T}
+n <- length(Y)
+p <- length(betas)
+
+s2 <- t(Y - (X %*% betas)) %*% (Y - (X %*% betas)) / (n - p)
+
+s <- sqrt(s2)
+
+c('Variância' = s2,
+  'RSE' = s) # Residual Standard Error
+```
+
+
+#### 3.2.3 Estimativa da variância dos coeficientes *$\sigma^2_{\beta_{j}}$*
+
+Por definição:
+
+$$Var(\hat{\beta}) = \sigma^2_{\epsilon} (\mathbf{X}^T\mathbf{X})^{-1}$$
+
+Estimador não viesado para $Var(\hat{\beta})$
+
+$$Var(\hat{\beta}) =s^2(\mathbf{X}^T\mathbf{X})^{-1}$$
+
+* Onde $Var(\hat{\beta_j})$ é encontrada na diagonal principal da matriz
+
+```{r e5, echo=T}
+
+matriz_var_betas <- c(s2) * solve(t(X) %*% X)
+
+var_betas <- diag(matriz_var_betas)
+se_betas <- diag(matriz_var_betas)
+
+
+sumario <- rbind(var_betas, se_betas)
+rownames(sumario) <- c("Var Beta", "SE Beta")
+sumario
+
+```
+
+#### 3.2.4 Estimativa da variância dos valores ajustados *$\sigma^2_{\hat{y_i}}$*
+
+Por definição:
+$$Var(\hat{y}_i) = \mathbf{x}_i(\mathbf{X}^T \mathbf{X})^{-1}\mathbf{x}_i^{T}\sigma^2_\epsilon$$
+Estimador não viesado:
+$$Var(\hat{y}_i) = \mathbf{x}_i(\mathbf{X}^T \mathbf{X})^{-1}\mathbf{x}_i^{T}s^2$$
+
+Onde:
+
+Por definição:
+* $\mathbf{x}_i$ corresponde ao *vetor* da i-ésima linha da matriz de covariáveis
+$\mathbf{X}$ tendo dimensões 1xp 
+
+
+```{r e6, echo=T}
+
+x_i <- matrix(c(1, 18, 66, 0, 1), nr = 1)# = Intercepto, Age, Ht, Gender, Smoke -> Vetor Linha
+
+y_chapeu_i <- x_i %*% betas 
+var_y_chapeu_i <- x_i %*% solve(t(X) %*% X) %*% t(x_i) * s2
+
+
+sumario <- cbind(y_chapeu_i, var_y_chapeu_i, sqrt(var_y_chapeu_i))
+colnames(sumario) <- c("^Y", "Var(^Y)", "SE(^Y)")
+sumario
+
+```
+
+### ANOVA para um Modelo de Regressão Linear
+
+#### 4.1 Teoria
+
+ Trata-se de um teste para avaliar as seguintes hipóteses:
+ 
+$H_0: \beta_j$ = 0, para todo *j*
+
+$H_1: \beta_j \neq$ 0, para algum *j*
+
+Seja:
+
+$$F = \frac{\frac{SS_{Reg}}{p-1}}{\frac{SS_{Error}}{n-p}}=
+\frac{MS_{Reg}}{MSE}$$
+
+
+Então:
+
+$$F \sim F(df_1, df_2)\sim F(p-1, n-p)$$
+
+Onde:
+
+* $SS_{Reg} = \sum_{i=1}^{n} (\hat{y}_i - \overline{y})^2$ = Sum of Squares of
+Regression
+
+* $SS_{Error} = \sum_{i=1}^{n} ({y}_i - \hat{y}_i)^2$ = Sum of Squares of
+Errors
+
+* $df_1 = p -1$ = Graus de Liberdade do Numerador
+
+* $df_2 = n - p$ = Graus de Liberdade do Denominador
+
+* $MSE = \sigma^2_\epsilon$ = Mean Square Error
+
+* $MS_{Reg}$ = Mean Square of Regression
+
+* p = Número de Coeficientes estimados
+
+* n = Número de observações
+
+```{r f3, echo=T}
+data("gestation") # Dados da Regrassão Linear Simples em 2.1
+
+
+x <- gestation$Age # Variável Independente
+y <- gestation$Weight # Variável Dependente (Resposta)
+
+media_x <- mean(x)
+media_y <- mean(y)
+
+SSxy <- sum((x - media_x) * y) 
+SSx <- sum((x - media_x) * x) # Soma dos Quadrados de X (Sum of Squares [SS])
+
+beta1 <- SSxy / SSx
+beta0 <- media_y - beta1 * media_x
+
+y_ajustado <- beta0 + beta1 * x
+
+c('Beta0' = beta0, 'Beta1' = beta1)
+
+# Tabela Anova
+SSReg <- sum((y_ajustado - media_y) ^ 2)
+df1 <- 2 - 1 # p - 1 -> 2 coeficientes: p = 2
+
+SSError <- sum((y - y_ajustado) ^ 2)
+df2 <- length(y) - 2 # n - p
+
+MSE <- SSError / df2
+MSReg <- SSReg / df1
+
+F_Obs <- MSReg / MSE
+
+p_valor <- pf(F_Obs, df1, df2, lower.tail = F)# P(F > x)
+
+
+data.frame("DF" = c(df1, df2), 
+           "Soma Quadrados" = c(SSReg, SSError),
+           "Media SQ" = c(MSReg, MSE),
+           "F Calc" = c(F_Obs, NA),
+           "P-Valor" = c(p_valor, NA),
+           "Decisão" = c(ifelse(p_valor < 0.05, "Rejeita HO",
+                                                "Não Rejeita H0"), NA))
+
+
+
+```
+
+#### 4.2 Função no R
+
+```{r f1, echo=T}
+
+modelo_linear_simples <- lm(Weight ~ Age, data = gestation)
+
+anova(modelo_linear_simples)
+```
+
+### 5. ANOVA para comparar  Modelos de Regressão Linear Aninhados
+
+#### 5.1 Teoria
+
+Sejam:
+
+Modelo A: $\hat{y} = \hat{\beta_0} + \hat{\beta_1}x_1 + ...+ \hat{\beta}_{pA}x_{pA}$
+
+Modelo B:$\hat{y} = \hat{\beta_0} + \hat{\beta_1}x_1 + ...+ \hat{\beta}_{pA}x_{pA} + ... + \hat{\beta}_{pB}x_{pB}$
+
+O *Modelo A* está aninhado ao *B*, pois pode ser obtido em B ao fazer-se
+$\hat{\beta}_{pA+1} = ...= \hat{\beta}_{pB} = 0$.
+
+Testamos as hipóteses:
+
+$H_0: \hat{\beta}_{pA+1} = ...=\hat{\beta}_{pB} = 0$ (Modelos A e B são equivalentes)
+
+$H_1: \hat{\beta}_j \neq 0$ para algum j, j = pA + 1, ..., pB
+
+
+Para tal, utilizamos a estatística F, diferença em RSS (Residual Sum of Squares).
+
+$$F = \frac{\frac{RSS_A - RSS_B} {p_B-p_A}}{s^2_B} = \frac{\frac{RSS_A - RSS_B} {p_B-p_A}}{\frac{RSS_B}{n-p_B}}$$
+
+$$F\sim F(p_B - p_A, n - p_B)$$
+
+Onde:
+
+* $RSS_A = {\sum_{i=1}^{n}(\hat{y}_i - y_i)^2}_A = {\sum_{i=1}^{n}e_i^2}_A$
+(Soma dos Quadrados dos Resíduos do modelo A)
+
+* $RSS_B = {\sum_{i=1}^{n}(\hat{y}_i - y_i)^2}_B = {\sum_{i=1}^{n}e_i^2}_B$
+(Soma dos Quadrados dos Resíduos do modelo B)
+
+* $p_B$ = Número de coeficientes do modelo B
+
+* $p_A$ = Número de coeficientes do modelo A
+
+* $n$ = Número de observações
+
+```{r g1, echo=T}
+
+modelo_A <- lm(log(FEV) ~ Age + Smoke, data = lungcap)
+modelo_B <- lm(log(FEV) ~ Age + Ht + Gender + Smoke, data = lungcap)
+
+RSS_A <- sum(modelo_A$residuals ^ 2)
+RSS_B <- sum(modelo_B$residuals ^ 2)
+
+n <- length(lungcap$FEV)
+
+p_A <- length(modelo_A$coefficients)
+p_B <- length(modelo_B$coefficients)
+
+F_Obs <- ((RSS_A - RSS_B) / (p_B - p_A)) / (RSS_B / (n - p_B))
+# OU
+# F_Obs <- ((RSS_A - RSS_B) / (p_B - p_A)) / (summary(modelo_B)$sigma ^ 2)
+
+p_valor <- pf(F_Obs, df1 = p_B - p_A, df2 = n - p_B, lower.tail = F)
+
+
+data.frame('RSS' = round(c(RSS_A, RSS_B), 3),
+           'DF' = c(n - p_A, n - p_B),
+           'DF Diff' = c(NA, p_B - p_A),
+           'SS A-B' = round(c(NA, RSS_A - RSS_B), 3),
+           'F Obs' = c(NA, F_Obs),
+           'P-Valor' = c(NA, p_valor),
+           'Decisão' = ifelse(p_valor < 0.05, "Rejeita H0", "Não Rejeita H0"),
+           row.names = c('Modelo A (2 var)', 'Modelo B (4 var)'))
+
+```
+
+#### 5.2 Função no R 
+
+```{r g2}
+anova(modelo_A, modelo_B)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,65 @@
+---
+title: "Pressupostos e Diágnósticos de uma Regressão Linear"
+author: "Elton J"
+date: "31/05/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1. Pressuposto de uma Regressão Linear
+
+* **Linearidade**: O preditor linear captura a verdadeira relação entre $y_i$ e
+as variáveis explicativas e todas as variáveis relevantes estão incluídas no
+modelo.
+
+* **Independência**: As respostas $y_i$ são estatisticamente independentes entre
+si
+
+* **Normalidade**: As respostas $\hat{y}_i$ são normalmente distribuídas ao redor
+de $y_i$.
+
+* **Homocedasticidade**: As respostas $\hat{y}_i$ tem variância constante.
+
+* **Ausência de Outliers**: Todas as resostas foram geradas pelo mesmo processo,
+então, o mesmo modelo de regressão é apropriado para todas as observações.
+
+## 2. Resíduos
+
+* Resíduos
+
+$$\epsilon_i = y_i - \hat{y}_i$$ 
+
+* Resíduos Padronizados
+
+$$\epsilon_i^{'} = \frac{y_i - \hat{y}_i}{s_{\epsilon} \sqrt{1 - h_i}}$$ 
+
+Onde:
+
+* $y_i$ = Valor da resposta na i-ésima linha.
+
+* $\hat{y}_i$ = Valor da previsto da resposta na i-ésima linha.
+
+
+* $s_\epsilon = \sqrt{\frac{\sum_{i=1}^{n}(y_i - \hat{y}_i)^2}{n-2}}$ Estimador 
+de $\sigma_\epsilon$ (RSE)
+
+* $h_i = \frac{1}{n} + \frac{x_i - \overline{x}}{SS_x}$
+
+* $SS_x = \sum_{i=1}^{n}(x_i - \overline{x}_w)x_i$
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
