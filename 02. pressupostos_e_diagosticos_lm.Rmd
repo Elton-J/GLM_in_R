@@ -2,14 +2,23 @@
 title: "Pressupostos e Diágnósticos de uma Regressão Linear"
 author: "Elton J"
 date: "31/05/2020"
-output: html_document
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    theme: united
+    df_print: kable
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+
+library(GLMsData)
+library(tidyverse)
+library(broom)
 ```
 
-## 1. Pressuposto de uma Regressão Linear
+## Pressuposto de uma Regressão Linear
 
 * **Linearidade**: O preditor linear captura a verdadeira relação entre $y_i$ e
 as variáveis explicativas e todas as variáveis relevantes estão incluídas no
@@ -26,21 +35,25 @@ de $y_i$.
 * **Ausência de Outliers**: Todas as resostas foram geradas pelo mesmo processo,
 então, o mesmo modelo de regressão é apropriado para todas as observações.
 
-## 2. Resíduos
+## Resíduos
 
-* Resíduos
+* Resíduos estimados
 
-$$\epsilon_i = y_i - \hat{y}_i$$ 
+$$\hat{\epsilon_i} = y_i - \hat{y}_i$$ 
+
+$$Var(\hat{\epsilon_i}) = \sigma^2_y (1-h_i)$$
 
 * Resíduos Padronizados
 
-$$\epsilon_i^{'} = \frac{y_i - \hat{y}_i}{s_{\epsilon} \sqrt{1 - h_i}}$$ 
+$$\hat{\epsilon_i}^{'} = \frac{y_i - \hat{y}_i}{s_{\epsilon} \sqrt{1 - h_i}}$$ 
+
+$$Var(\hat{\epsilon_i}^{'}) = \sigma^2_y \text{ ; }\hat{\epsilon_i}^{'} \sim T_{df = n-p}$$ 
 
 Onde:
 
-* $y_i$ = Valor da resposta na i-ésima linha.
+* $y_i$ = Valor da variável resposta na i-ésima linha.
 
-* $\hat{y}_i$ = Valor da previsto da resposta na i-ésima linha.
+* $\hat{y}_i$ = Valor estimado da variável resposta na i-ésima linha.
 
 
 * $s_\epsilon = \sqrt{\frac{\sum_{i=1}^{n}(y_i - \hat{y}_i)^2}{n-2}}$ Estimador 
@@ -50,16 +63,63 @@ de $\sigma_\epsilon$ (RSE)
 
 * $SS_x = \sum_{i=1}^{n}(x_i - \overline{x}_w)x_i$
 
-```{r cars}
-summary(cars)
+* $n = \text{Número de observações}$ 
+
+* $p = \text{Número de variáveis independentes}$ 
+
+
+### Exemplo
+
+#### Pela função
+
+```{r}
+data(lungcap)
+
+lungcap %>% 
+  glimpse()
 ```
 
-## Including Plots
+```{r}
+modelo_linear <- lm(FEV ~ Ht, data = lungcap)
 
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
+modelo_linear %>% 
+  augment() %>% 
+  select(-.cooksd) %>% 
+  head()
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+#### Na Raça
+
+```{r}
+modelo_linear <- lm(FEV ~ Ht, data = lungcap)
+
+# Dados
+x_i <- lungcap$Ht
+y_i <- lungcap$FEV
+
+# Y_Chapeu
+yhat_i <- modelo_linear$fitted.values
+
+# Residuo estimado
+e_i <- y_i - yhat_i
+
+# Leverage
+n <- nrow(lungcap)
+ssX <- sum((x_i - mean(x_i)) * x_i)
+h_i <- (1 / n) + ((x_i - mean(x_i)) ^ 2 / ssX)
+
+# Residuo padronizado
+s_e <- sqrt(sum(e_i ^ 2) / (n - 2))
+e_pad_i <- e_i / (s_e * sqrt(1 - h_i))
+
+sigma_yhat_i <- sqrt((s_e ^ 2) * (1/n + ((x_i - mean(x_i)) ^ 2) / ssX))
+
+data.frame(FEV = y_i,
+           Ht = x_i,
+           yhat_i,
+           e_i,
+           e_pad_i,
+           h_i,
+           sigma_yhat_i) %>% 
+  head()
+```
